@@ -1,3 +1,5 @@
 config.py
 sha-cache.db
 __pycache__
+.idea
+.venv

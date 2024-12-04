@@ -302,6 +302,9 @@ def scrape():
     if check_video_vertical(scene):
         result['Tags'].append({ 'Name': 'Vertical Video' })
     # if result, add tag
+    tags = re.findall(r'#(\w+)', result["Details"])
+    for tag in tags:
+        result['Tags'].append({ "Name": tag })
     result['Tags'].append({ 'Name': success_tag })
     return result
 
