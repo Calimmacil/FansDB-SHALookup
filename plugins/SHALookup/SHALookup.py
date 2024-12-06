@@ -1,4 +1,6 @@
 # stdlib
+import string
+import time
 from datetime import datetime
 import hashlib
 from html import unescape
@@ -77,7 +79,8 @@ def sha_file(file):
 
 # get post
 headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/120.0'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/120.0',
+    'referer': 'https://coomer.su'
 }
 
 # define stash globally
@@ -89,9 +92,46 @@ def add_sha256(sha256, oshash):
         return
     stash.file_set_fingerprints(scene["files"][0]["id"], {"type": "sha256", "value":sha256})
 
+def find_tags(search_tag):
+    log.debug(f"Looking for {search_tag}")
+    if stash.find_tag(search_tag):
+        # If the tag already exists, just return it.
+        log.debug("Tag already exists.")
+        return
+    # Need to check to see if we need to create an alias.
+    log.debug("Retrieving all tags.")
+    tags = stash.find_tags()
+    for tag in tags:
+        log.debug(f"Examining tag: '{tag}'")
+        no_space = tag["name"].replace(" ", "")
+        # Check if the tag name matches without spaces
+        if search_tag.lower() == no_space.lower():
+            log.debug(f"{search_tag} matches {tag}, adding alias.")
+            aliases = tag["aliases"]
+            log.debug(f"Adding {search_tag} to current aliases: {aliases}")
+            aliases.append(string.capwords(search_tag))
+            stash.update_tag({"id": tag["id"], "aliases": aliases})
+            return
+        # Check if any aliases match
+        for alias in tag["aliases"]:
+            ns = alias.replace(" ", "")
+            if search_tag.lower() == ns.lower():
+                aliases = tag["aliases"]
+                log.debug(f"Adding {search_tag} to current aliases: {aliases}")
+                aliases.append(string.capwords(search_tag))
+                stash.update_tag({"id": tag["id"], "aliases": aliases })
+                return
+    # No tags match. Give the user the option to create
+    return
 
 def getPostByHash(hash):
-    shares = requests.get('https://coomer.su/api/v1/search_hash/' + hash, headers=headers, timeout=10)
+    for attempt in range(1, 10):
+        shares = requests.get('https://coomer.su/api/v1/search_hash/' + hash, headers=headers, timeout=10)
+        if shares.status_code == 200:
+            break
+        log.debug(f"Request status code: {shares.status_code}")
+        time.sleep(5)
+    shares.raise_for_status()
     data = shares.json()
     if (shares.status_code == 404 or len(data) == 0):
         log.debug("No results found")
@@ -304,6 +344,7 @@ def scrape():
     # if result, add tag
     tags = re.findall(r'#(\w+)', result["Details"])
     for tag in tags:
+        find_tags(tag)
         result['Tags'].append({ "Name": tag })
     result['Tags'].append({ 'Name': success_tag })
     return result
